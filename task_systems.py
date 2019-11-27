@@ -1,5 +1,5 @@
 from functools import reduce
-from math import floor, gcd
+from math import floor, gcd, inf
 
 _DEBUG = True
 
@@ -71,6 +71,9 @@ class PeriodicTask:
         if self.cost <= 0 or self.cost is None:
             raise ValueError("Task cost must be non-negative!")
 
+        if self.period == inf and self.relative_deadline == inf:
+            raise ValueError("One-shot job (infinite period) cannot have infinite relative deadline!")
+
         if _DEBUG:
             assert all(x is not None for x in [self.phase, self.period, self.cost])
 
@@ -92,13 +95,21 @@ class PeriodicTask:
         return self.cost / self.relative_deadline
 
     def generate_jobs(self, final_time):
-        num_releases = floor((final_time - self.phase - self.relative_deadline) / self.period) + 1
-        jobs = [Job(
-            release=self.phase + k * self.period,
-            cost=self.cost,
-            deadline=self.phase + k * self.period + self.relative_deadline,
-            task=self
-        ) for k in range(num_releases)]
+        if self.period != inf:
+            num_releases = floor((final_time - self.phase - self.relative_deadline) / self.period) + 1
+            jobs = [Job(
+                release=self.phase + k * self.period,
+                cost=self.cost,
+                deadline=self.phase + k * self.period + self.relative_deadline,
+                task=self
+            ) for k in range(num_releases)]
+        else:
+            jobs = [Job(
+                release=self.phase,
+                cost=self.cost,
+                deadline=self.phase + self.relative_deadline,
+                task=self
+            )]
 
         if _DEBUG:
             if len(jobs) == 0:
@@ -135,7 +146,7 @@ class PeriodicTaskSystem:
         if len(self.tasks) == 0:
             self.hyperperiod = 0
         else:
-            self.hyperperiod = reduce(_lcm, [task.period for task in self.tasks])
+            self.hyperperiod = reduce(_lcm, [task.period for task in self.tasks if task.period != inf])
 
     def __str__(self):
         return f"Task System with {len(self.tasks)} tasks, hyperperiod={self.hyperperiod}" + \
