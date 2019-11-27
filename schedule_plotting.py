@@ -7,14 +7,20 @@ _OVERHEAD_COLOR = _COLORMAP(9)
 
 
 def plot_uniprocessor_schedule(schedule, job_height=0.75,
-                               arrowhead_width=0.75, arrowhead_height=0.2,
+                               arrowhead_width=None, arrowhead_height=0.2,
                                arrow_width=0.25, arrow_height=0.85,
-                               T_height=0.85, T_width=0.5, T_linewidth=4,
+                               T_height=0.85, T_width=None, T_linewidth=4,
                                fontsize=14):
     all_jobs = {scheduled_job.job for scheduled_job in schedule}
     largest_task_id = max(job.task.id for job in all_jobs)
-    vertical_offset = {job: largest_task_id - job.task.id - job_height / 2 for job in all_jobs}
+    vertical_offset = {job: job.task.id - job_height / 2 for job in all_jobs}
     last_deadline = max(job.deadline for job in all_jobs)
+
+    if T_width is None:
+        T_width = 0.5 * (last_deadline / 25)
+
+    if arrowhead_width is None:
+        arrowhead_width = 0.75 * (last_deadline / 25)
 
     for job in all_jobs:
         plt.hlines(vertical_offset[job], 0, last_deadline, linewidth=T_linewidth)

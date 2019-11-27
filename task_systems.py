@@ -16,9 +16,24 @@ class Job:
         self.remaining_cost = cost
         self.deadline = deadline  # absolute deadline
         self.task = task
+        self.started = False
+
+    def decrement_remaining_cost(self, execution_rate):
+        self.started = True
+        if self.has_remaining_overhead():
+            # overhead always executes at "full speed"
+            self.remaining_overhead -= 1
+        else:
+            self.remaining_cost -= execution_rate
 
     def has_started(self):
-        return self.cost == self.remaining_cost
+        if _DEBUG:
+            if self.remaining_cost < self.cost or self.remaining_overhead > 0:
+                assert self.started
+        return self.started
+
+    def has_remaining_overhead(self):
+        return self.remaining_overhead > 0
 
     def has_completed(self):
         if self.remaining_cost <= 0:

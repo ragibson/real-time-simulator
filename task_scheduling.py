@@ -1,14 +1,19 @@
-import warnings
-
 _DEBUG = True
 
 
 class Processor:
-    # TODO: add schedule_cost=0, dispatch_cost=0, preemption_cost=0
-    # TODO: add cache_warmup_time=0 and cold_cache_rate=1
-    def __init__(self):
+    def __init__(self, schedule_cost=0, dispatch_cost=0, preemption_cost=0,
+                 cache_warmup_time=0, cold_cache_rate=1):
         self.schedule = Schedule()
         self.time = 0
+
+        self.schedule_cost = schedule_cost
+        self.dispatch_cost = dispatch_cost
+        self.preemption_cost = preemption_cost
+
+        self.cache_warmup_time = cache_warmup_time
+        self.cold_cache_rate = cold_cache_rate
+        self.execution_rate = cold_cache_rate
 
     def last_job_scheduled(self):
         if len(self.schedule) > 0:
@@ -18,11 +23,29 @@ class Processor:
         return None  # idle
 
     def schedule_job(self, job):
+        if job != self.last_job_scheduled():
+            self.execution_rate = self.cold_cache_rate  # reset cache
+
+            if not job.has_started():
+                job.remaining_overhead += self.schedule_cost + self.dispatch_cost
+            elif self.last_job_scheduled() is None:  # CPU was idle
+                job.remaining_overhead += self.dispatch_cost + self.preemption_cost
+            else:
+                job.remaining_overhead += self.dispatch_cost + 2 * self.preemption_cost
+
         self.schedule.add(job, self.time, self.time + 1)
         self.time += 1
 
-        job.remaining_cost -= 1
-        if job.remaining_cost <= 0:
+        gain_cache_affinity = not job.has_remaining_overhead()
+        job.decrement_remaining_cost(self.execution_rate)
+
+        if gain_cache_affinity:
+            # TODO: floating point errors could cause issues here for some priority functions
+            self.execution_rate += ((1 - self.cold_cache_rate) / self.cache_warmup_time)
+            if self.execution_rate >= 1:
+                self.execution_rate = 1
+
+        if job.has_completed():
             self.schedule[-1].job_completed = True
 
     def idle_until(self, t):
@@ -81,8 +104,12 @@ class ScheduledJob:
 
 
 class UniprocessorScheduler:
-    def __init__(self, priority_function):
+    def __init__(self, priority_function, processor=None):
         self.priority_function = priority_function
+        if processor is None:
+            self.CPU = Processor()
+        else:
+            self.CPU = processor
 
     def generate_schedule(self, task_system, final_time=None):
         if final_time is None:
@@ -94,7 +121,7 @@ class UniprocessorScheduler:
                 final_time = 2 * task_system.hyperperiod + max(task.relative_deadline for task in task_system.tasks) + \
                              max(task.phase for task in task_system.tasks)
 
-        CPU = Processor()
+        CPU = self.CPU
         released_jobs = []
         remaining_jobs = sorted([job for task in task_system.tasks
                                  for job in task.generate_jobs(final_time)], key=lambda job: -job.release)
@@ -108,8 +135,10 @@ class UniprocessorScheduler:
                 for job in released_jobs:
                     if job_to_schedule is None or job_to_schedule.has_completed():
                         job_to_schedule = job
-                    elif self.priority_function(job, CPU.time) < self.priority_function(job_to_schedule, CPU.time):
-                        # strict inequality here favors continuing execution of previous job
+                    elif self.priority_function(job, CPU.time) + 1e-10 < self.priority_function(job_to_schedule,
+                                                                                                CPU.time):
+                        # strict inequality here favors continuing execution of previous job and addition of small 1e-10
+                        # value allows for minor handling of floating point errors from the variable execution rate
                         job_to_schedule = job
 
                 CPU.schedule_job(job_to_schedule)
