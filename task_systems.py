@@ -12,9 +12,20 @@ class Job:
     def __init__(self, release, cost, deadline, task):
         self.release = release
         self.cost = cost
+        self.remaining_overhead = 0  # overhead is essentially nonpreemptive execution cost
         self.remaining_cost = cost
         self.deadline = deadline  # absolute deadline
         self.task = task
+
+    def has_started(self):
+        return self.cost == self.remaining_cost
+
+    def has_completed(self):
+        if self.remaining_cost <= 0:
+            if _DEBUG:
+                assert self.remaining_overhead <= 0
+            return True
+        return False
 
     def __str__(self):
         return f"Job (release={self.release}, cost={self.cost}, deadline={self.deadline}) from {self.task}"

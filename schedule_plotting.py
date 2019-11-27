@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from matplotlib.ticker import MaxNLocator
 
 _COLORMAP = plt.get_cmap("Set1")
 _COLORS = [_COLORMAP(i) for i in range(8)]

@@ -10,9 +10,20 @@ class Processor:
         self.schedule = Schedule()
         self.time = 0
 
+    def last_job_scheduled(self):
+        if len(self.schedule) > 0:
+            last_scheduled_job = self.schedule[-1]
+            if last_scheduled_job.end_time == self.time:
+                return last_scheduled_job.job
+        return None  # idle
+
     def schedule_job(self, job):
         self.schedule.add(job, self.time, self.time + 1)
         self.time += 1
+
+        job.remaining_cost -= 1
+        if job.remaining_cost <= 0:
+            self.schedule[-1].job_completed = True
 
     def idle_until(self, t):
         if _DEBUG:
@@ -46,6 +57,9 @@ class Schedule:
         return "\n".join([str(x) for x in self.schedule])
 
     def add(self, job, start_time, end_time):
+        if _DEBUG:
+            assert end_time == start_time + 1
+
         if len(self.schedule) > 0 and job == self.schedule[-1].job:
             if _DEBUG:
                 assert start_time == self.schedule[-1].end_time
@@ -53,10 +67,6 @@ class Schedule:
             self.schedule[-1].end_time = end_time
         else:
             self.schedule.append(ScheduledJob(start_time, end_time, job))
-
-        job.remaining_cost -= (end_time - start_time)
-        if job.remaining_cost <= 0:
-            self.schedule[-1].job_completed = True
 
 
 class ScheduledJob:
@@ -94,10 +104,17 @@ class UniprocessorScheduler:
 
         while CPU.time < final_time and len(remaining_jobs) + len(released_jobs) > 0:
             if len(released_jobs) != 0:
-                job_to_schedule = min(released_jobs, key=lambda job: self.priority_function(job, CPU.time))
+                job_to_schedule = CPU.last_job_scheduled()
+                for job in released_jobs:
+                    if job_to_schedule is None or job_to_schedule.has_completed():
+                        job_to_schedule = job
+                    elif self.priority_function(job, CPU.time) < self.priority_function(job_to_schedule, CPU.time):
+                        # strict inequality here favors continuing execution of previous job
+                        job_to_schedule = job
+
                 CPU.schedule_job(job_to_schedule)
 
-                if job_to_schedule.remaining_cost <= 0:
+                if job_to_schedule.has_completed():
                     released_jobs.remove(job_to_schedule)
 
                 if CPU.time > job_to_schedule.deadline:

@@ -1,26 +1,35 @@
 from math import inf
 
 
-def priority_RM(job, t):
+def _RM(job, t):
     return job.task.period
 
 
-def priority_DM(job, t):
+def _DM(job, t):
     return job.task.relative_deadline
 
 
-def priority_static(job, t):
+def _static(job, t):
     if job.task.id is None:
         raise ValueError(f"Cannot use task ID {job.task.id} as priority!")
     return job.task.id
 
 
-def priority_EDF(job, t):
+def _EDF(job, t):
     return job.deadline - t
 
 
-def priority_LLF(job, t):
+def _LLF(job, t):
     return job.deadline - t - job.remaining_cost
+
+
+def handle_overhead(priority_function):
+    def overhead_variant(job, t):
+        if job.remaining_overhead > 0:
+            return -inf
+        return priority_function(job, t)
+
+    return overhead_variant
 
 
 def make_nonpreemptive(priority_function):
@@ -31,6 +40,12 @@ def make_nonpreemptive(priority_function):
 
     return nonpreemptive_variant
 
+
+priority_RM = handle_overhead(_RM)
+priority_DM = handle_overhead(_DM)
+priority_static = handle_overhead(_static)
+priority_EDF = handle_overhead(_EDF)
+priority_LLF = handle_overhead(_LLF)
 
 priority_NP_RM = make_nonpreemptive(priority_RM)
 priority_NP_DM = make_nonpreemptive(priority_DM)
