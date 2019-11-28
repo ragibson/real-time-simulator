@@ -98,7 +98,6 @@ class PeriodicTask:
         if self.period != inf:
             # num_releases = floor((final_time - self.phase - self.relative_deadline) / self.period) + 1
             num_releases = floor((final_time - self.phase) / self.period) + 1
-            print("num_releases is", num_releases)
             jobs = [Job(
                 release=self.phase + k * self.period,
                 cost=self.cost,

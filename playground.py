@@ -1,24 +1,33 @@
 from task_generation import *
 from priority_functions import *
-from task_scheduling import UniprocessorScheduler, Processor
-from task_systems import PeriodicTask, PeriodicTaskSystem
+from task_scheduling import *
+from task_systems import *
 from schedule_plotting import *
 from time import time
 import matplotlib.pyplot as plt
 
-task_system = PeriodicTaskSystem([PeriodicTask(phase=0, period=10, cost=5, relative_deadline=20, id=0),
-                                  PeriodicTask(phase=0, period=20, cost=5, relative_deadline=25, id=1)])
+t1 = PeriodicTask(period=100, cost=50, id=0)
+t2 = PeriodicTask(period=100, cost=50, id=1)
+t3 = PeriodicTask(period=100, cost=50, id=2)
+t4 = PeriodicTask(period=100, cost=50, id=3)
+task_system = PeriodicTaskSystem([t1, t2, t3, t4])
 
-print(task_system)
+scheduler = MultiprocessorScheduler(priority_function=priority_LLF,
+                                    processors=[Processor(), Processor()])
 
-scheduler = UniprocessorScheduler(priority_function=priority_EDF,
-                                  processor=Processor())
 start = time()
-schedule, schedulable = scheduler.generate_schedule(task_system=task_system)
+schedules, schedulable = scheduler.generate_schedule(task_system=task_system)
 print(f"Took {time() - start:.2f} s")
-print(schedule)
-print(schedulable)
 
-plot_uniprocessor_schedule(schedule)
+print(schedules[0])
+print("=======")
+print(schedules[1])
+
+plt.figure()
+plot_uniprocessor_schedule(schedules[0])
+plt.tight_layout()
+
+plt.figure()
+plot_uniprocessor_schedule(schedules[1])
 plt.tight_layout()
 plt.show()

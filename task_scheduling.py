@@ -1,3 +1,5 @@
+from math import inf
+
 _DEBUG = True
 
 
@@ -145,14 +147,12 @@ class UniprocessorScheduler:
                 CPU.schedule_job(job_to_schedule)
 
                 if job_to_schedule.has_completed():
-                    print("removing", job_to_schedule)
                     released_jobs.remove(job_to_schedule)
 
                 if CPU.time > job_to_schedule.deadline:
                     return CPU.schedule, False  # not schedulable
             elif len(remaining_jobs) > 0:
                 # idle until next job release
-                print("idling until", remaining_jobs[-1].release)
                 CPU.idle_until(remaining_jobs[-1].release)
 
             while len(remaining_jobs) > 0 and remaining_jobs[-1].release <= CPU.time:
@@ -162,7 +162,101 @@ class UniprocessorScheduler:
             assert all(job.deadline > final_time for job in remaining_jobs) and \
                    all(job.deadline > final_time for job in released_jobs)
 
-            # if len(remaining_jobs) + len(released_jobs) == 0:
-            #     assert schedulable
-
         return CPU.schedule, True
+
+
+class MultiprocessorScheduler:
+    def __init__(self, priority_function, processors):
+        self.priority_function = priority_function
+        self.CPUs = processors
+        self.num_processors = len(processors)
+
+    def generate_schedule(self, task_system, final_time=None):
+        if final_time is None:
+            if all(task.phase == 0 for task in task_system.tasks) and \
+                    all(task.relative_deadline <= task.period for task in task_system.tasks):
+                final_time = task_system.hyperperiod
+            else:
+                # Result by Leung and Merrill: If a deadline is missed in a periodic task system with
+                # utilization <= 1, then it will be missed by time 2*P + max(D_i) + max(s_i)
+                final_time = 2 * task_system.hyperperiod + max(task.relative_deadline for task in task_system.tasks) + \
+                             max(task.phase for task in task_system.tasks)
+
+        CPUs = self.CPUs
+        released_jobs = []
+        remaining_jobs = sorted([job for task in task_system.tasks
+                                 for job in task.generate_jobs(final_time)], key=lambda job: -job.release)
+
+        if task_system.utilization() > self.num_processors:
+            return [CPU.schedule for CPU in CPUs], False  # not schedulable
+
+        while CPUs[0].time < final_time and len(remaining_jobs) + len(released_jobs) > 0:
+            print(f"time step: {CPUs[0].time}")
+            for j in released_jobs:
+                print(f"{str(j)} has priority {self.priority_function(j, CPUs[0].time)}")
+            print("==========================")
+
+            if len(released_jobs) != 0:
+                jobs_to_schedule = {CPU.last_job_scheduled() for CPU in CPUs
+                                    if CPU.last_job_scheduled() is not None
+                                    and not CPU.last_job_scheduled().has_completed()}
+
+                for job in released_jobs:
+                    if len(jobs_to_schedule) < self.num_processors:
+                        jobs_to_schedule.add(job)
+                    elif self.priority_function(job, CPUs[0].time) + 1e-10 < \
+                            max(self.priority_function(job_to_schedule, CPUs[0].time)
+                                for job_to_schedule in jobs_to_schedule):
+                        # strict inequality here favors continuing execution of previous job and addition of 1e-10
+                        # allows for minor handling of floating point errors from the variable execution rate
+                        jobs_to_schedule.remove(max(jobs_to_schedule,
+                                                    key=lambda job: self.priority_function(job, CPUs[0].time)))
+                        jobs_to_schedule.add(job)
+
+                        if _DEBUG:
+                            assert len(jobs_to_schedule) == self.num_processors
+
+                idle_processors = {CPU for CPU in CPUs}
+                last_time = CPUs[0].time
+
+                for CPU in CPUs:
+                    # if we're continuing an old execution, do so
+                    if CPU.last_job_scheduled() in jobs_to_schedule:
+                        idle_processors.remove(CPU)
+                        jobs_to_schedule.remove(CPU.last_job_scheduled())
+                        CPU.schedule_job(CPU.last_job_scheduled())
+
+                for job_to_schedule in jobs_to_schedule:
+                    CPU = idle_processors.pop()
+                    CPU.schedule_job(job_to_schedule)
+
+                for CPU in CPUs:
+                    CPU.idle_until(last_time + 1)
+
+                for CPU in CPUs:
+                    job_to_schedule = CPU.last_job_scheduled()
+                    if job_to_schedule is not None and job_to_schedule.has_completed():
+                        released_jobs.remove(job_to_schedule)
+
+                if _DEBUG:
+                    assert all(CPU.time == CPUs[0].time for CPU in CPUs)
+
+                for CPU in CPUs:
+                    print("chose to schedule", str(CPU.last_job_scheduled()))
+
+                if any(CPU.last_job_scheduled() is not None and CPU.time > CPU.last_job_scheduled().deadline
+                       for CPU in CPUs):
+                    return [CPU.schedule for CPU in CPUs], False  # not schedulable
+            elif len(remaining_jobs) > 0:
+                for CPU in CPUs:
+                    # idle until next job release
+                    CPU.idle_until(remaining_jobs[-1].release)
+
+            while len(remaining_jobs) > 0 and remaining_jobs[-1].release <= CPUs[0].time:
+                released_jobs.append(remaining_jobs.pop())
+
+        if all(job.deadline > final_time for job in remaining_jobs) and \
+                all(job.deadline > final_time for job in released_jobs):
+            return [CPU.schedule for CPU in CPUs], True
+        else:
+            return [CPU.schedule for CPU in CPUs], False
