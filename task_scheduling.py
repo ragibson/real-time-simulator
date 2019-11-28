@@ -211,20 +211,38 @@ class MultiprocessorScheduler:
                     if jobs_to_schedule[CPU] is None or jobs_to_schedule[CPU].has_completed():
                         jobs_to_schedule[CPU] = None
 
+                if self.restrict_migration:
+                    for job in released_jobs:
+                        CPU_to_reschedule = migration_restriction[job]
+                        if CPU_to_reschedule is not None:
+                            current_job = jobs_to_schedule[CPU_to_reschedule]
+                            if current_job is None or \
+                                    self.priority_function(job, CPUs[0].time) + 1e-10 < \
+                                    self.priority_function(current_job, CPUs[0].time):
+                                # strict inequality here favors continuing execution of previous job and the 1e-10
+                                # allows for minor handling of floating point errors from the variable execution rate
+                                jobs_to_schedule[CPU_to_reschedule] = job
+
                 for job in released_jobs:
                     if job in jobs_to_schedule.values():
                         continue
 
-                    if self.has_idle_processors(CPUs, jobs_to_schedule):
-                        jobs_to_schedule[self.get_idle_processor(CPUs, jobs_to_schedule)] = job
-                    elif self.priority_function(job, CPUs[0].time) + 1e-10 < \
-                            max(self.priority_function(job_to_schedule, CPUs[0].time)
-                                for job_to_schedule in jobs_to_schedule.values()):
-                        # strict inequality here favors continuing execution of previous job and addition of 1e-10
-                        # allows for minor handling of floating point errors from the variable execution rate
-                        CPU_to_reschedule = max(jobs_to_schedule.items(),
-                                                key=lambda CPU_job: self.priority_function(CPU_job[1], CPUs[0].time))[0]
-                        jobs_to_schedule[CPU_to_reschedule] = job
+                    if _DEBUG:
+                        if not self.restrict_migration:
+                            assert migration_restriction[job] is None
+
+                    if migration_restriction[job] is None:
+                        if self.has_idle_processors(CPUs, jobs_to_schedule):
+                            jobs_to_schedule[self.get_idle_processor(CPUs, jobs_to_schedule)] = job
+                        elif self.priority_function(job, CPUs[0].time) + 1e-10 < \
+                                max(self.priority_function(job_to_schedule, CPUs[0].time)
+                                    for job_to_schedule in jobs_to_schedule.values()):
+                            # strict inequality here favors continuing execution of previous job and the 1e-10
+                            # allows for minor handling of floating point errors from the variable execution rate
+                            CPU_to_reschedule = max(jobs_to_schedule.items(),
+                                                    key=lambda CPU_job:
+                                                    self.priority_function(CPU_job[1], CPUs[0].time))[0]
+                            jobs_to_schedule[CPU_to_reschedule] = job
 
                         if _DEBUG:
                             assert len(jobs_to_schedule) == self.num_processors
@@ -246,7 +264,7 @@ class MultiprocessorScheduler:
 
                         if _DEBUG:
                             if migration_restriction[job_to_schedule] is not None:
-                                assert CPU == migration_restriction[jobs_to_schedule]
+                                assert CPU == migration_restriction[job_to_schedule]
 
                     if job_to_schedule is not None and job_to_schedule.has_completed():
                         released_jobs.remove(job_to_schedule)
