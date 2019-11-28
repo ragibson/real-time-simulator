@@ -191,17 +191,15 @@ class MultiprocessorScheduler:
             return [CPU.schedule for CPU in CPUs], False  # not schedulable
 
         while CPUs[0].time < final_time and len(remaining_jobs) + len(released_jobs) > 0:
-            print(f"time step: {CPUs[0].time}")
-            for j in released_jobs:
-                print(f"{str(j)} has priority {self.priority_function(j, CPUs[0].time)}")
-            print("==========================")
-
             if len(released_jobs) != 0:
                 jobs_to_schedule = {CPU.last_job_scheduled() for CPU in CPUs
                                     if CPU.last_job_scheduled() is not None
                                     and not CPU.last_job_scheduled().has_completed()}
 
                 for job in released_jobs:
+                    if job in jobs_to_schedule:
+                        continue
+
                     if len(jobs_to_schedule) < self.num_processors:
                         jobs_to_schedule.add(job)
                     elif self.priority_function(job, CPUs[0].time) + 1e-10 < \
@@ -209,8 +207,9 @@ class MultiprocessorScheduler:
                                 for job_to_schedule in jobs_to_schedule):
                         # strict inequality here favors continuing execution of previous job and addition of 1e-10
                         # allows for minor handling of floating point errors from the variable execution rate
-                        jobs_to_schedule.remove(max(jobs_to_schedule,
-                                                    key=lambda job: self.priority_function(job, CPUs[0].time)))
+                        job_to_remove = max(jobs_to_schedule,
+                                            key=lambda job: self.priority_function(job, CPUs[0].time))
+                        jobs_to_schedule.remove(job_to_remove)
                         jobs_to_schedule.add(job)
 
                         if _DEBUG:
@@ -240,9 +239,6 @@ class MultiprocessorScheduler:
 
                 if _DEBUG:
                     assert all(CPU.time == CPUs[0].time for CPU in CPUs)
-
-                for CPU in CPUs:
-                    print("chose to schedule", str(CPU.last_job_scheduled()))
 
                 if any(CPU.last_job_scheduled() is not None and CPU.time > CPU.last_job_scheduled().deadline
                        for CPU in CPUs):
