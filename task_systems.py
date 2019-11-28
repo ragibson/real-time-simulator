@@ -9,7 +9,15 @@ def _lcm(a, b):
 
 
 class Job:
+    """A released job from a task"""
+
     def __init__(self, release, cost, deadline, task):
+        """
+        :param release: release time
+        :param cost: execution cost
+        :param deadline: deadline
+        :param task: task that the job is released from
+        """
         self.release = release
         self.cost = cost
         self.remaining_overhead = 0  # overhead is essentially nonpreemptive execution cost
@@ -19,6 +27,7 @@ class Job:
         self.started = False
 
     def decrement_remaining_cost(self, execution_rate):
+        """Decrease the remaining execution cost with the current cache rate, preferring to complete overhead first"""
         self.started = True
         if self.has_remaining_overhead():
             # overhead always executes at "full speed"
@@ -27,6 +36,7 @@ class Job:
             self.remaining_cost -= execution_rate
 
     def has_started(self):
+        """Returns whether the job has started execution"""
         if _DEBUG:
             if self.remaining_cost < self.cost or self.remaining_overhead > 0:
                 assert self.started
@@ -47,7 +57,17 @@ class Job:
 
 
 class PeriodicTask:
+    """A periodic task that can release jobs"""
+
     def __init__(self, phase=None, period=None, cost=None, relative_deadline=None, id=None):
+        """
+        :param phase: phase of task. Defaults to zero
+        :param period: period of task
+        :param cost: execution cost of task
+        :param relative_deadline: relative deadline of task. Defaults to period
+        :param id: task ID
+        """
+
         if phase is None:
             self.phase = 0
         else:
@@ -95,6 +115,8 @@ class PeriodicTask:
         return self.cost / self.relative_deadline
 
     def generate_jobs(self, final_time):
+        """Generate all jobs released by :final_time:"""
+
         if self.period != inf:
             # num_releases = floor((final_time - self.phase - self.relative_deadline) / self.period) + 1
             num_releases = floor((final_time - self.phase) / self.period) + 1
@@ -122,6 +144,8 @@ class PeriodicTask:
 
 
 class PeriodicTaskSystem:
+    """System of multiple periodic tasks"""
+
     def __init__(self, initial_tasks=None):
         if initial_tasks is None:
             self.tasks = []

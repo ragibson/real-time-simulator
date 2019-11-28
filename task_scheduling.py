@@ -4,8 +4,17 @@ _DEBUG = True
 
 
 class Processor:
+    """Processor that can schedule jobs"""
+
     def __init__(self, schedule_cost=0, dispatch_cost=0, preemption_cost=0,
                  cache_warmup_time=None, cold_cache_rate=1):
+        """
+        :param schedule_cost: overhead to schedule a job
+        :param dispatch_cost: overhead to dispatch a job
+        :param preemption_cost: overhead to preempt/resume a job
+        :param cache_warmup_time: time to completely warm up cache
+        :param cold_cache_rate: rate of execution when cache is cold
+        """
         self.schedule = Schedule()
         self.time = 0
 
@@ -18,6 +27,7 @@ class Processor:
         self.execution_rate = cold_cache_rate
 
     def last_job_scheduled(self):
+        """Returns the last job scheduled or None if processor was idle"""
         if len(self.schedule) > 0:
             last_scheduled_job = self.schedule[-1]
             if last_scheduled_job.end_time == self.time:
@@ -25,15 +35,17 @@ class Processor:
         return None  # idle
 
     def schedule_job(self, job):
+        """Schedule a job for one time unit"""
         if job != self.last_job_scheduled():
             self.execution_rate = self.cold_cache_rate  # reset cache
 
+            if self.last_job_scheduled() is not None:
+                job.remaining_overhead += self.preemption_cost  # preempt last job
+
             if not job.has_started():
                 job.remaining_overhead += self.schedule_cost + self.dispatch_cost
-            elif self.last_job_scheduled() is None:  # CPU was idle
-                job.remaining_overhead += self.dispatch_cost + self.preemption_cost
             else:
-                job.remaining_overhead += self.dispatch_cost + 2 * self.preemption_cost
+                job.remaining_overhead += self.dispatch_cost + self.preemption_cost  # resume new job
 
         self.schedule.add(job, self.time, self.time + 1)
         self.time += 1
@@ -42,7 +54,7 @@ class Processor:
         job.decrement_remaining_cost(self.execution_rate)
 
         if gain_cache_affinity and self.cache_warmup_time is not None:
-            # TODO: floating point errors could cause issues here for some priority functions
+            # linearly increase execution rate to 1 (full speed) by the cache warmup time
             self.execution_rate += ((1 - self.cold_cache_rate) / self.cache_warmup_time)
             if self.execution_rate >= 1:
                 self.execution_rate = 1
@@ -51,12 +63,15 @@ class Processor:
             self.schedule[-1].job_completed = True
 
     def idle_until(self, t):
+        """Idle processor until specified time"""
         if _DEBUG:
             assert t >= self.time
         self.time = t
 
 
 class Schedule:
+    """Sequence of scheduled jobs"""
+
     def __init__(self):
         self.schedule = []
 
@@ -82,19 +97,25 @@ class Schedule:
         return "\n".join([str(x) for x in self.schedule])
 
     def add(self, job, start_time, end_time):
+        """Add a job to the schedule"""
+
         if _DEBUG:
+            # With a fully general priority function, we can only schedule one time unit at a time
             assert end_time == start_time + 1
 
         if len(self.schedule) > 0 and job == self.schedule[-1].job:
             if _DEBUG:
                 assert start_time == self.schedule[-1].end_time
 
+            # extend the last scheduled job if this is a continued execution
             self.schedule[-1].end_time = end_time
         else:
             self.schedule.append(ScheduledJob(start_time, end_time, job))
 
 
 class ScheduledJob:
+    """A job scheduled during an interval of time"""
+
     def __init__(self, start_time, end_time, job):
         self.start_time = start_time
         self.end_time = end_time
@@ -106,7 +127,13 @@ class ScheduledJob:
 
 
 class UniprocessorScheduler:
+    """Entity that schedules on a single processor"""
+
     def __init__(self, priority_function, processor=None):
+        """
+        :param priority_function: job priority function to use
+        :param processor: processor to schedule on. Defaults to a zero overhead CPU
+        """
         self.priority_function = priority_function
         if processor is None:
             self.CPU = Processor()
@@ -114,9 +141,14 @@ class UniprocessorScheduler:
             self.CPU = processor
 
     def generate_schedule(self, task_system, final_time=None):
+        """Generate a schedule for a provided task system"""
+
+        # If no final time is provided, compute the final time required to provably show the task system is schedulable
         if final_time is None:
             if all(task.phase == 0 for task in task_system.tasks) and \
                     all(task.relative_deadline <= task.period for task in task_system.tasks):
+                # For synchronous task systems with relative deadlines not exceeding periods, a deadline miss must
+                # occur by the hyperperiod
                 final_time = task_system.hyperperiod
             else:
                 # Result by Leung and Merrill: If a deadline is missed in a periodic task system with
@@ -137,7 +169,7 @@ class UniprocessorScheduler:
                 job_to_schedule = CPU.last_job_scheduled()
                 for job in released_jobs:
                     if job_to_schedule is None or job_to_schedule.has_completed():
-                        job_to_schedule = job
+                        job_to_schedule = job  # CPU was idle, so choose this job
                     elif self.priority_function(job, CPU.time) + 1e-10 < self.priority_function(job_to_schedule,
                                                                                                 CPU.time):
                         # strict inequality here favors continuing execution of previous job and addition of 1e-10
@@ -166,7 +198,14 @@ class UniprocessorScheduler:
 
 
 class MultiprocessorScheduler:
+    """Entity that schedules on a multiprocessor"""
+
     def __init__(self, priority_function, processors, restrict_migration=False):
+        """
+        :param priority_function: job priority function to use
+        :param processor: processors to schedule on
+        :param restrict_migration: whether job migration is restricted
+        """
         self.priority_function = priority_function
         self.CPUs = processors
         self.num_processors = len(processors)
@@ -174,19 +213,25 @@ class MultiprocessorScheduler:
 
     @staticmethod
     def has_idle_processors(CPUs, jobs_to_schedule):
+        """Returns whether any of the CPUs are idle with the current set of jobs to schedule"""
         return any(jobs_to_schedule[CPU] is None for CPU in CPUs)
 
     @staticmethod
     def get_idle_processor(CPUs, jobs_to_schedule):
+        """Returns an idle CPU with the current set of jobs to schedule (or None if no such CPU exists)"""
         for CPU in CPUs:
             if jobs_to_schedule[CPU] is None:
                 return CPU
         return None
 
     def generate_schedule(self, task_system, final_time=None):
+        """Generate a schedule for a provided task system"""
+
         if final_time is None:
             if all(task.phase == 0 for task in task_system.tasks) and \
                     all(task.relative_deadline <= task.period for task in task_system.tasks):
+                # For synchronous task systems with relative deadlines not exceeding periods, a deadline miss must
+                # occur by the hyperperiod
                 final_time = task_system.hyperperiod
             else:
                 # Result by Leung and Merrill: If a deadline is missed in a periodic task system with
@@ -212,6 +257,7 @@ class MultiprocessorScheduler:
                         jobs_to_schedule[CPU] = None
 
                 if self.restrict_migration:
+                    # Handle restricted migration jobs first
                     for job in released_jobs:
                         CPU_to_reschedule = migration_restriction[job]
                         if CPU_to_reschedule is not None:
@@ -223,6 +269,7 @@ class MultiprocessorScheduler:
                                 # allows for minor handling of floating point errors from the variable execution rate
                                 jobs_to_schedule[CPU_to_reschedule] = job
 
+                # Handle all jobs whose migration is not (yet) restricted
                 for job in released_jobs:
                     if job in jobs_to_schedule.values():
                         continue
@@ -233,6 +280,7 @@ class MultiprocessorScheduler:
 
                     if migration_restriction[job] is None:
                         if self.has_idle_processors(CPUs, jobs_to_schedule):
+                            # CPU was idle, so choose this job
                             jobs_to_schedule[self.get_idle_processor(CPUs, jobs_to_schedule)] = job
                         elif self.priority_function(job, CPUs[0].time) + 1e-10 < \
                                 max(self.priority_function(job_to_schedule, CPUs[0].time)
@@ -260,6 +308,7 @@ class MultiprocessorScheduler:
                     job_to_schedule = CPU.last_job_scheduled()
 
                     if self.restrict_migration and job_to_schedule is not None:
+                        # set migration restriction since job has been scheduled
                         migration_restriction[job_to_schedule] = CPU
 
                         if _DEBUG:
