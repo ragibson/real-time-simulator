@@ -12,9 +12,20 @@ def plot_uniprocessor_schedule(schedule, job_height=0.75,
                                T_height=0.85, T_width=None, T_linewidth=4,
                                fontsize=14):
     all_jobs = {scheduled_job.job for scheduled_job in schedule}
+
+    if len(all_jobs) == 0:
+        return
+
+    if any(job.task.id is None for job in all_jobs):
+        raise ValueError("All tasks must have integer IDs for plotting!")
+
     largest_task_id = max(job.task.id for job in all_jobs)
     vertical_offset = {job: job.task.id - job_height / 2 for job in all_jobs}
     last_deadline = max(job.deadline for job in all_jobs)
+
+    plt.plot([0, last_deadline],
+             [min(vertical_offset.values()), max(vertical_offset.values())], linewidth=0,
+             color="white")
 
     if T_width is None:
         T_width = 0.5 * (last_deadline / 25)

@@ -62,13 +62,13 @@ class PeriodicTask:
         else:
             self.relative_deadline = relative_deadline
 
-        if self.period <= 0 or self.period is None:
+        if self.period is None or self.period <= 0:
             raise ValueError("Task period must be non-negative!")
 
         if self.relative_deadline <= 0:
             raise ValueError("Task relative deadline must be non-negative!")
 
-        if self.cost <= 0 or self.cost is None:
+        if self.cost is None or self.cost <= 0:
             raise ValueError("Task cost must be non-negative!")
 
         if self.period == inf and self.relative_deadline == inf:
@@ -96,7 +96,9 @@ class PeriodicTask:
 
     def generate_jobs(self, final_time):
         if self.period != inf:
-            num_releases = floor((final_time - self.phase - self.relative_deadline) / self.period) + 1
+            # num_releases = floor((final_time - self.phase - self.relative_deadline) / self.period) + 1
+            num_releases = floor((final_time - self.phase) / self.period) + 1
+            print("num_releases is", num_releases)
             jobs = [Job(
                 release=self.phase + k * self.period,
                 cost=self.cost,
@@ -115,7 +117,7 @@ class PeriodicTask:
             if len(jobs) == 0:
                 assert final_time < self.phase + self.relative_deadline
             else:
-                assert jobs[-1].deadline <= final_time < jobs[-1].release + self.period + self.relative_deadline
+                assert jobs[-1].release <= final_time < jobs[-1].release + self.period + self.relative_deadline
 
         return jobs
 

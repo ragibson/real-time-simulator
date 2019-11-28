@@ -3,7 +3,7 @@ _DEBUG = True
 
 class Processor:
     def __init__(self, schedule_cost=0, dispatch_cost=0, preemption_cost=0,
-                 cache_warmup_time=0, cold_cache_rate=1):
+                 cache_warmup_time=None, cold_cache_rate=1):
         self.schedule = Schedule()
         self.time = 0
 
@@ -39,7 +39,7 @@ class Processor:
         gain_cache_affinity = not job.has_remaining_overhead()
         job.decrement_remaining_cost(self.execution_rate)
 
-        if gain_cache_affinity:
+        if gain_cache_affinity and self.cache_warmup_time is not None:
             # TODO: floating point errors could cause issues here for some priority functions
             self.execution_rate += ((1 - self.cold_cache_rate) / self.cache_warmup_time)
             if self.execution_rate >= 1:
@@ -113,7 +113,8 @@ class UniprocessorScheduler:
 
     def generate_schedule(self, task_system, final_time=None):
         if final_time is None:
-            if all(task.phase == 0 for task in task_system.tasks):
+            if all(task.phase == 0 for task in task_system.tasks) and \
+                    all(task.relative_deadline <= task.period for task in task_system.tasks):
                 final_time = task_system.hyperperiod
             else:
                 # Result by Leung and Merrill: If a deadline is missed in a periodic task system with
@@ -137,22 +138,31 @@ class UniprocessorScheduler:
                         job_to_schedule = job
                     elif self.priority_function(job, CPU.time) + 1e-10 < self.priority_function(job_to_schedule,
                                                                                                 CPU.time):
-                        # strict inequality here favors continuing execution of previous job and addition of small 1e-10
-                        # value allows for minor handling of floating point errors from the variable execution rate
+                        # strict inequality here favors continuing execution of previous job and addition of 1e-10
+                        # allows for minor handling of floating point errors from the variable execution rate
                         job_to_schedule = job
 
                 CPU.schedule_job(job_to_schedule)
 
                 if job_to_schedule.has_completed():
+                    print("removing", job_to_schedule)
                     released_jobs.remove(job_to_schedule)
 
                 if CPU.time > job_to_schedule.deadline:
                     return CPU.schedule, False  # not schedulable
             elif len(remaining_jobs) > 0:
                 # idle until next job release
+                print("idling until", remaining_jobs[-1].release)
                 CPU.idle_until(remaining_jobs[-1].release)
 
             while len(remaining_jobs) > 0 and remaining_jobs[-1].release <= CPU.time:
                 released_jobs.append(remaining_jobs.pop())
 
-        return CPU.schedule, len(remaining_jobs) + len(released_jobs) == 0
+        if _DEBUG:
+            assert all(job.deadline > final_time for job in remaining_jobs) and \
+                   all(job.deadline > final_time for job in released_jobs)
+
+            # if len(remaining_jobs) + len(released_jobs) == 0:
+            #     assert schedulable
+
+        return CPU.schedule, True
