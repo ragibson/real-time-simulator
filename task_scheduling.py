@@ -166,10 +166,22 @@ class UniprocessorScheduler:
 
 
 class MultiprocessorScheduler:
-    def __init__(self, priority_function, processors):
+    def __init__(self, priority_function, processors, restrict_migration=False):
         self.priority_function = priority_function
         self.CPUs = processors
         self.num_processors = len(processors)
+        self.restrict_migration = restrict_migration
+
+    @staticmethod
+    def has_idle_processors(CPUs, jobs_to_schedule):
+        return any(jobs_to_schedule[CPU] is None for CPU in CPUs)
+
+    @staticmethod
+    def get_idle_processor(CPUs, jobs_to_schedule):
+        for CPU in CPUs:
+            if jobs_to_schedule[CPU] is None:
+                return CPU
+        return None
 
     def generate_schedule(self, task_system, final_time=None):
         if final_time is None:
@@ -186,54 +198,56 @@ class MultiprocessorScheduler:
         released_jobs = []
         remaining_jobs = sorted([job for task in task_system.tasks
                                  for job in task.generate_jobs(final_time)], key=lambda job: -job.release)
+        migration_restriction = {job: None for job in remaining_jobs}
 
         if task_system.utilization() > self.num_processors:
             return [CPU.schedule for CPU in CPUs], False  # not schedulable
 
         while CPUs[0].time < final_time and len(remaining_jobs) + len(released_jobs) > 0:
             if len(released_jobs) != 0:
-                jobs_to_schedule = {CPU.last_job_scheduled() for CPU in CPUs
-                                    if CPU.last_job_scheduled() is not None
-                                    and not CPU.last_job_scheduled().has_completed()}
+                jobs_to_schedule = {CPU: CPU.last_job_scheduled() for CPU in CPUs}
+
+                for CPU in CPUs:
+                    if jobs_to_schedule[CPU] is None or jobs_to_schedule[CPU].has_completed():
+                        jobs_to_schedule[CPU] = None
 
                 for job in released_jobs:
-                    if job in jobs_to_schedule:
+                    if job in jobs_to_schedule.values():
                         continue
 
-                    if len(jobs_to_schedule) < self.num_processors:
-                        jobs_to_schedule.add(job)
+                    if self.has_idle_processors(CPUs, jobs_to_schedule):
+                        jobs_to_schedule[self.get_idle_processor(CPUs, jobs_to_schedule)] = job
                     elif self.priority_function(job, CPUs[0].time) + 1e-10 < \
                             max(self.priority_function(job_to_schedule, CPUs[0].time)
-                                for job_to_schedule in jobs_to_schedule):
+                                for job_to_schedule in jobs_to_schedule.values()):
                         # strict inequality here favors continuing execution of previous job and addition of 1e-10
                         # allows for minor handling of floating point errors from the variable execution rate
-                        job_to_remove = max(jobs_to_schedule,
-                                            key=lambda job: self.priority_function(job, CPUs[0].time))
-                        jobs_to_schedule.remove(job_to_remove)
-                        jobs_to_schedule.add(job)
+                        CPU_to_reschedule = max(jobs_to_schedule.items(),
+                                                key=lambda CPU_job: self.priority_function(CPU_job[1], CPUs[0].time))[0]
+                        jobs_to_schedule[CPU_to_reschedule] = job
 
                         if _DEBUG:
                             assert len(jobs_to_schedule) == self.num_processors
 
-                idle_processors = {CPU for CPU in CPUs}
                 last_time = CPUs[0].time
 
-                for CPU in CPUs:
-                    # if we're continuing an old execution, do so
-                    if CPU.last_job_scheduled() in jobs_to_schedule:
-                        idle_processors.remove(CPU)
-                        jobs_to_schedule.remove(CPU.last_job_scheduled())
-                        CPU.schedule_job(CPU.last_job_scheduled())
-
-                for job_to_schedule in jobs_to_schedule:
-                    CPU = idle_processors.pop()
-                    CPU.schedule_job(job_to_schedule)
+                for CPU, job in jobs_to_schedule.items():
+                    if job is not None:
+                        CPU.schedule_job(job)
 
                 for CPU in CPUs:
                     CPU.idle_until(last_time + 1)
 
                 for CPU in CPUs:
                     job_to_schedule = CPU.last_job_scheduled()
+
+                    if self.restrict_migration and job_to_schedule is not None:
+                        migration_restriction[job_to_schedule] = CPU
+
+                        if _DEBUG:
+                            if migration_restriction[job_to_schedule] is not None:
+                                assert CPU == migration_restriction[jobs_to_schedule]
+
                     if job_to_schedule is not None and job_to_schedule.has_completed():
                         released_jobs.remove(job_to_schedule)
 
