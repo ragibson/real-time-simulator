@@ -1,9 +1,7 @@
-from task_generation import *
 from priority_functions import *
 from task_scheduling import *
 from task_systems import *
 from schedule_plotting import *
-from time import time
 import matplotlib.pyplot as plt
 
 task_system = PeriodicTaskSystem([PeriodicTask(period=100, cost=30, id=k) for k in range(7)])

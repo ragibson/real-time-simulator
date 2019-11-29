@@ -5,35 +5,33 @@ from task_systems import *
 from schedule_plotting import *
 from time import time
 import matplotlib.pyplot as plt
+from random import choice, randint
 
-t1 = PeriodicTask(period=100, cost=30, id=0)
-t2 = PeriodicTask(period=100, cost=30, id=1)
-t3 = PeriodicTask(period=100, cost=30, id=2)
-t4 = PeriodicTask(period=100, cost=30, id=3)
-t5 = PeriodicTask(period=100, cost=30, id=4)
-t6 = PeriodicTask(period=100, cost=30, id=5)
-t7 = PeriodicTask(period=100, cost=30, id=6)
-t8 = PeriodicTask(period=100, cost=30, id=7)
-task_system = PeriodicTaskSystem([t1, t2, t3, t4, t5, t6, t7, t8])
+MS = 1000
 
-scheduler = MultiprocessorScheduler(priority_function=priority_LLF,
-                                    processors=[Processor(),
-                                                Processor(),
-                                                Processor()],
-                                    restrict_migration=True)
+
+def random_task(id):
+    period = MS * choice([2 ** k for k in range(10)])
+    cost = randint(1, period)
+    relative_deadline = randint(cost, period)
+    return PeriodicTask(phase=randint(0, period - 1), period=period,
+                        cost=cost, relative_deadline=relative_deadline, id=id)
+
+
+task_system = PeriodicTaskSystem([random_task(k) for k in range(6)])
+while task_system.utilization() > 1:
+    task_system = PeriodicTaskSystem([random_task(k) for k in range(6)])
+
+print(task_system.utilization(), task_system.hyperperiod)
+
+scheduler = UniprocessorScheduler(priority_function=priority_LLF)
+# scheduler = MultiprocessorScheduler(priority_function=priority_LLF,
+#                                     processors=[Processor(),
+#                                                 Processor(),
+#                                                 Processor()],
+#                                     restrict_migration=True)
 
 start = time()
 schedules, schedulable = scheduler.generate_schedule(task_system=task_system)
 print(f"Took {time() - start:.2f} s")
-
-print(schedulable)
-
-plt.figure()
-plot_multiprocessor_schedule_per_processor(schedules)
-plt.tight_layout()
-# plt.show()
-
-plt.figure()
-plot_multiprocessor_schedule_per_task(schedules)
-plt.tight_layout()
-plt.show()
+print("Is schedulable?", schedulable)
