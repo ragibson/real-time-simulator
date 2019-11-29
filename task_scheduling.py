@@ -26,6 +26,11 @@ class Processor:
         self.cold_cache_rate = cold_cache_rate
         self.execution_rate = cold_cache_rate
 
+    def reset(self):
+        self.schedule = Schedule()
+        self.time = 0
+        self.execution_rate = self.cold_cache_rate
+
     def last_job_scheduled(self):
         """Returns the last job scheduled or None if processor was idle"""
         if len(self.schedule) > 0:
@@ -157,6 +162,7 @@ class UniprocessorScheduler:
                              max(task.phase for task in task_system.tasks)
 
         CPU = self.CPU
+        CPU.reset()
         released_jobs = []
         remaining_jobs = sorted([job for task in task_system.tasks
                                  for job in task.generate_jobs(final_time)], key=lambda job: -job.release)
@@ -240,6 +246,8 @@ class MultiprocessorScheduler:
                              max(task.phase for task in task_system.tasks)
 
         CPUs = self.CPUs
+        for CPU in CPUs:
+            CPU.reset()
         released_jobs = []
         remaining_jobs = sorted([job for task in task_system.tasks
                                  for job in task.generate_jobs(final_time)], key=lambda job: -job.release)
