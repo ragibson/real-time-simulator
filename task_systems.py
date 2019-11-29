@@ -157,6 +157,9 @@ class PeriodicTaskSystem:
     def __iter__(self):
         return iter(self.tasks)
 
+    def __len__(self):
+        return len(self.tasks)
+
     def add_tasks(self, new_tasks):
         self.tasks.extend(new_tasks)
         self._update_hyperperiod()

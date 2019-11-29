@@ -1,3 +1,4 @@
+import functools
 from math import inf
 
 _DEBUG = True
@@ -44,13 +45,13 @@ class Processor:
         if job != self.last_job_scheduled():
             self.execution_rate = self.cold_cache_rate  # reset cache
 
-            if self.last_job_scheduled() is not None:
-                job.remaining_overhead += self.preemption_cost  # preempt last job
-
             if not job.has_started():
                 job.remaining_overhead += self.schedule_cost + self.dispatch_cost
             else:
                 job.remaining_overhead += self.dispatch_cost + self.preemption_cost  # resume new job
+
+            if self.last_job_scheduled() is not None:
+                job.remaining_overhead += self.preemption_cost  # preempt last job
 
         self.schedule.add(job, self.time, self.time + 1)
         self.time += 1
@@ -196,11 +197,11 @@ class UniprocessorScheduler:
             while len(remaining_jobs) > 0 and remaining_jobs[-1].release <= CPU.time:
                 released_jobs.append(remaining_jobs.pop())
 
-        if _DEBUG:
-            assert all(job.deadline > final_time for job in remaining_jobs) and \
-                   all(job.deadline > final_time for job in released_jobs)
-
-        return CPU.schedule, True
+        if all(job.deadline > final_time for job in remaining_jobs) and \
+                all(job.deadline > final_time for job in released_jobs):
+            return CPU.schedule, True
+        else:
+            return CPU.schedule, False
 
 
 class MultiprocessorScheduler:
