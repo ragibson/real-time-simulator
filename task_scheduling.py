@@ -50,10 +50,10 @@ class Processor:
         self.schedule.add(job, self.time, self.time + 1)
         self.time += 1
 
-        gain_cache_affinity = not job.has_remaining_overhead()
+        gain_cache_hit_ratio = not job.has_remaining_overhead()
         job.decrement_remaining_cost(self.execution_rate)
 
-        if gain_cache_affinity and self.cache_warmup_time is not None:
+        if gain_cache_hit_ratio and self.cache_warmup_time is not None:
             # linearly increase execution rate to 1 (full speed) by the cache warmup time
             self.execution_rate += ((1 - self.cold_cache_rate) / self.cache_warmup_time)
             if self.execution_rate >= 1:
