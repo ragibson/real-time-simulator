@@ -94,6 +94,14 @@ def plot_uniprocessor_schedule(schedule, job_height=0.75,
     plt.xticks(fontsize=fontsize)
     plt.yticks(range(0, largest_task_id + 1), fontsize=fontsize)
 
+    # Extend x tick marks upward
+    old_xlim = plt.xlim()
+    old_ylim = plt.ylim()
+    xticks = [x for x in plt.xticks()[0] if x >= 0 and x <= last_deadline]
+    plt.vlines(xticks, old_ylim[0], old_ylim[1], linewidth=2, linestyles="dashed", alpha=0.5)
+    plt.xlim(*old_xlim)
+    plt.ylim(*old_ylim)
+
 
 def plot_multiprocessor_schedule_per_processor(schedules, job_height=0.75,
                                                T_linewidth=4,
@@ -141,6 +149,14 @@ def plot_multiprocessor_schedule_per_processor(schedules, job_height=0.75,
     plt.ylabel("processor id", fontsize=fontsize)
     plt.xticks(fontsize=fontsize)
     plt.yticks(range(0, len(schedules)), fontsize=fontsize)
+
+    # Extend x tick marks upward
+    old_xlim = plt.xlim()
+    old_ylim = plt.ylim()
+    xticks = [x for x in plt.xticks()[0] if 0 <= x <= last_deadline]
+    plt.vlines(xticks, old_ylim[0], old_ylim[1], linewidth=2, linestyles="dashed", alpha=0.5)
+    plt.xlim(*old_xlim)
+    plt.ylim(*old_ylim)
 
 
 def plot_multiprocessor_schedule_per_task(schedules, job_height=0.75,
@@ -233,3 +249,11 @@ def plot_multiprocessor_schedule_per_task(schedules, job_height=0.75,
     plt.ylabel("task id", fontsize=fontsize)
     plt.xticks(fontsize=fontsize)
     plt.yticks(range(0, largest_task_id + 1), fontsize=fontsize)
+
+    # Extend x tick marks upward
+    old_xlim = plt.xlim()
+    old_ylim = plt.ylim()
+    xticks = [x for x in plt.xticks()[0] if x >= 0 and x <= last_deadline]
+    plt.vlines(xticks, old_ylim[0], old_ylim[1], linewidth=2, linestyles="dashed", alpha=0.5)
+    plt.xlim(*old_xlim)
+    plt.ylim(*old_ylim)

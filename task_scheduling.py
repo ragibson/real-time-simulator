@@ -321,7 +321,8 @@ class MultiprocessorScheduler:
                 if _DEBUG:
                     assert all(CPU.time == CPUs[0].time for CPU in CPUs)
 
-                if any(CPU.last_job_scheduled() is not None and CPU.time > CPU.last_job_scheduled().deadline
+                if any(CPU.last_job_scheduled() is not None and not CPU.last_job_scheduled().has_completed() and \
+                       CPU.time > CPU.last_job_scheduled().deadline
                        for CPU in CPUs):
                     return [CPU.schedule for CPU in CPUs], False  # not schedulable
             elif len(remaining_jobs) > 0:
