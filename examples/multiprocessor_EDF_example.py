@@ -13,7 +13,7 @@ t5 = PeriodicTask(phase=40, period=100, cost=20, relative_deadline=20, id=4)
 task_system = PeriodicTaskSystem([t1, t2, t3, t4, t5])
 print(task_system.utilization(), task_system.density())
 
-scheduler = MultiprocessorScheduler(priority_function=priority_EDF,
+scheduler = MultiprocessorScheduler(priority_function=priority_NP_EDF,
                                     processors=[Processor(),
                                                 Processor(),
                                                 Processor()],
@@ -27,7 +27,10 @@ plot_multiprocessor_schedule_per_processor(schedules)
 plt.tight_layout()
 plt.savefig("EDF_multiprocessor_example1.pdf")
 plt.close()
+plot_external_legend(schedules, entity="Task", filename="EDF_multiprocessor_legend1.pdf")
 
 plot_multiprocessor_schedule_per_task(schedules)
 plt.tight_layout()
 plt.savefig("EDF_multiprocessor_example2.pdf")
+plt.close()
+plot_external_legend(schedules, entity="Processor", filename="EDF_multiprocessor_legend2.pdf")

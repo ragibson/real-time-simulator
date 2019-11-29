@@ -1,9 +1,49 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import numpy as np
 
 _COLORMAP = plt.get_cmap("Set1")
 _COLORS = [_COLORMAP(i) for i in range(8)]
 _OVERHEAD_COLOR = _COLORMAP(9)
+
+
+def plot_external_legend(schedules, entity="Task", filename="legend.pdf", expand=None, fontsize=14):
+    """
+    Export a legend for a multiprocessor schedule plot.
+
+    :param schedules: list of schedules to plot
+    :param entity: 'Task' or 'Processor'
+    :param filename: filename to save plot to
+    :param expand: amount by which to expand plot borders. Defaults to [-5, -5, 5, 5]
+    :param fontsize: font size in plot
+    """
+    if expand is None:
+        expand = [-5, -5, 5, 5]
+
+    fig = plt.figure()
+
+    if entity == "Processor":
+        num_entities = len(schedules) - 1
+    elif entity == "Task":
+        num_entities = max(scheduled_job.job.task.id for schedule in schedules for scheduled_job in schedule)
+    else:
+        raise ValueError(f"Entity {entity} not implemented for legend!")
+
+    for task_id in range(num_entities + 1):
+        rect = patches.Rectangle((0, 0), 0, 0,
+                                 linewidth=2, edgecolor='black',
+                                 facecolor=_COLORS[task_id % len(_COLORS)],
+                                 label=f"{entity} {task_id}")
+        fig.gca().add_patch(rect)
+
+    legend = fig.legend(loc="center", framealpha=1, frameon=True, fontsize=fontsize)
+    legend_fig = legend.figure
+    legend_fig.canvas.draw()
+    bbox = legend.get_window_extent()
+    bbox = bbox.from_extents(*(bbox.extents + np.array(expand)))
+    bbox = bbox.transformed(legend_fig.dpi_scale_trans.inverted())
+    legend_fig.savefig(filename, dpi="figure", bbox_inches=bbox)
+    plt.close(legend_fig)
 
 
 def plot_uniprocessor_schedule(schedule, job_height=0.75,
@@ -109,12 +149,11 @@ def plot_multiprocessor_schedule_per_processor(schedules, job_height=0.75,
     """
     Plot a multiprocessor schedule with one row in the plot per processor.
 
-    :param schedule: schedule to plot
+    :param schedules: list of schedules to plot
     :param job_height: height of each job in the plot
     :param T_linewidth: linewidth of horizontal row lines
     :param fontsize: font size in plot
     """
-
     all_jobs = {scheduled_job.job for schedule in schedules for scheduled_job in schedule}
 
     if len(all_jobs) == 0:
@@ -167,7 +206,7 @@ def plot_multiprocessor_schedule_per_task(schedules, job_height=0.75,
     """
     Plot a multiprocessor schedule with one row in the plot per task.
 
-    :param schedule: schedule to plot
+    :param schedule: list of schedules to plot
     :param job_height: height of each job in the plot
     :param arrowhead_width: width of release/deadline arrowheads. Defaults to 0.75 * (last_deadline / 25)
     :param arrowhead_height: height of release/deadline arrowheads
