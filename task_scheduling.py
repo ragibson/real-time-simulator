@@ -8,13 +8,13 @@ class Processor:
     """Processor that can schedule jobs"""
 
     def __init__(self, schedule_cost=0, dispatch_cost=0, preemption_cost=0,
-                 cache_warmup_time=None, cold_cache_rate=1):
+                 cache_warmup_time=None, warm_cache_rate=1):
         """
         :param schedule_cost: overhead to schedule a job
         :param dispatch_cost: overhead to dispatch a job
         :param preemption_cost: overhead to preempt/resume a job
         :param cache_warmup_time: time to completely warm up cache
-        :param cold_cache_rate: rate of execution when cache is cold
+        :param warm_cache_rate: rate of execution when cache is cold
         """
         self.schedule = Schedule()
         self.time = 0
@@ -24,13 +24,13 @@ class Processor:
         self.preemption_cost = preemption_cost
 
         self.cache_warmup_time = cache_warmup_time
-        self.cold_cache_rate = cold_cache_rate
-        self.execution_rate = cold_cache_rate
+        self.warm_cache_rate = warm_cache_rate
+        self.execution_rate = warm_cache_rate
 
     def reset(self):
         self.schedule = Schedule()
         self.time = 0
-        self.execution_rate = self.cold_cache_rate
+        self.execution_rate = self.warm_cache_rate
 
     def last_job_scheduled(self):
         """Returns the last job scheduled or None if processor was idle"""
@@ -43,7 +43,7 @@ class Processor:
     def schedule_job(self, job):
         """Schedule a job for one time unit"""
         if job != self.last_job_scheduled():
-            self.execution_rate = self.cold_cache_rate  # reset cache
+            self.execution_rate = 1  # reset cache
 
             if not job.has_started():
                 job.remaining_overhead += self.schedule_cost + self.dispatch_cost
@@ -60,10 +60,10 @@ class Processor:
         job.decrement_remaining_cost(self.execution_rate)
 
         if gain_cache_hit_ratio and self.cache_warmup_time is not None:
-            # linearly increase execution rate to 1 (full speed) by the cache warmup time
-            self.execution_rate += ((1 - self.cold_cache_rate) / self.cache_warmup_time)
-            if self.execution_rate >= 1:
-                self.execution_rate = 1
+            # linearly increase execution rate to warm cache rate by the cache warmup time
+            self.execution_rate += ((self.warm_cache_rate - 1) / self.cache_warmup_time)
+            if self.execution_rate >= self.warm_cache_rate:
+                self.execution_rate = self.warm_cache_rate
 
         if job.has_completed():
             self.schedule[-1].job_completed = True
@@ -168,7 +168,7 @@ class UniprocessorScheduler:
         remaining_jobs = sorted([job for task in task_system.tasks
                                  for job in task.generate_jobs(final_time)], key=lambda job: -job.release)
 
-        if task_system.utilization() > 1:
+        if task_system.utilization() > CPU.warm_cache_rate:
             return CPU.schedule, False  # not schedulable
 
         while CPU.time < final_time and len(remaining_jobs) + len(released_jobs) > 0:
@@ -254,7 +254,7 @@ class MultiprocessorScheduler:
                                  for job in task.generate_jobs(final_time)], key=lambda job: -job.release)
         migration_restriction = {job: None for job in remaining_jobs}
 
-        if task_system.utilization() > self.num_processors:
+        if task_system.utilization() > self.num_processors * max(CPU.warm_cache_rate for CPU in CPUs):
             return [CPU.schedule for CPU in CPUs], False  # not schedulable
 
         while CPUs[0].time < final_time and len(remaining_jobs) + len(released_jobs) > 0:

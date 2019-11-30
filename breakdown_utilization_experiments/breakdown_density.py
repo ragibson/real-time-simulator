@@ -19,14 +19,15 @@ def reweight_task_system(w, task_system):
                                for task in task_system])
 
 
-def uniprocessor_breakdown_density(scheduler, task_system, density_tolerance=1e-3):
+def uniprocessor_breakdown_density(scheduler, task_system, density_tolerance=1e-3, warm_cache_rate=50):
     @functools.lru_cache(maxsize=10)
     def test_weight(weight):
         reweighted_task_system = reweight_task_system(weight, task_system)
         _, schedulable = scheduler.generate_schedule(reweighted_task_system)
         return reweighted_task_system, schedulable, reweighted_task_system.density()
 
-    weight = (1 + len(task_system) / min(task.period for task in task_system)) / task_system.utilization()
+    weight = warm_cache_rate * (1 + len(task_system) / min(task.period for task in task_system)) \
+             / task_system.utilization()
     weight_step = weight
 
     last_schedulable = False
