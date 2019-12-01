@@ -317,6 +317,10 @@ class MultiprocessorScheduler:
                     job_to_schedule = CPU.last_job_scheduled()
 
                     if self.restrict_migration and job_to_schedule is not None:
+                        if _DEBUG:
+                            if migration_restriction[job_to_schedule] is not None:
+                                assert CPU == migration_restriction[job_to_schedule]
+
                         # set migration restriction since job has been scheduled
                         migration_restriction[job_to_schedule] = CPU
 
