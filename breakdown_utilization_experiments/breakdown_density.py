@@ -66,7 +66,7 @@ def multiprocessor_breakdown_density(scheduler, task_system, utilization_toleran
         reweighted_task_system, schedulable, new_density = test_weight(weight)
 
         if last_density == inf:
-                assert not schedulable
+            assert not schedulable
 
         # print(f"trying weight {weight} density {new_density} schedulable? {schedulable}")
         if schedulable and not last_schedulable and abs(new_density - last_density) < utilization_tolerance:
