@@ -1,4 +1,5 @@
-from math import inf
+from math import ceil, floor, inf
+from task_systems import PeriodicTask
 
 """
 This module contains priority functions for real time schedule.
@@ -59,6 +60,21 @@ def make_nonpreemptive(priority_function):
         return priority_function(job, t)
 
     return nonpreemptive_variant
+
+
+def make_pfair(task):
+    phase, period, cost, relative_deadline, id = task.phase, task.period, task.cost, task.relative_deadline, task.id
+
+    weight = cost / relative_deadline
+    new_tasks = []
+    for i in range(1, cost + 1):
+        pseudorelease = phase + floor((i - 1) / weight)
+        pseudodeadline = phase + ceil(i / weight)
+        window_length = pseudodeadline - pseudorelease
+        new_tasks.append(PeriodicTask(phase=pseudorelease, period=period,
+                                      cost=1, relative_deadline=window_length, id=id))
+
+    return new_tasks
 
 
 priority_RM = handle_overhead(_RM)
