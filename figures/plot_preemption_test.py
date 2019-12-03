@@ -31,7 +31,7 @@ plt.plot(xs, ys, linestyle="dashed", label="G-NP-EDF")
 plt.scatter(xs, ys, marker='+')
 
 plt.ylabel("breakdown utilization")
-plt.xlabel(f"cache warmup time ($\mu$s)")
+plt.xlabel(f"preemption cost ($\mu$s)")
 plt.legend()
 # plt.show()
 plt.savefig("multiprocessor_preemption.pdf")
