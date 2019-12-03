@@ -20,13 +20,14 @@ scheduler = MultiprocessorScheduler(priority_function=priority_Pfair,
                                     restrict_migration=False)
 
 schedules, schedulable = scheduler.generate_schedule(task_system=task_system, final_time=100)
+print(schedulable)
 
 plot_multiprocessor_schedule_per_processor(schedules)
+plt.tight_layout()
 plt.savefig("Pfair_multiprocessor_example1.pdf")
 plt.close()
-plot_external_legend(schedules, entity="Task", filename="EDF_multiprocessor_legend1.pdf")
 
 plot_multiprocessor_schedule_per_task(schedules)
+plt.tight_layout()
 plt.savefig("Pfair_multiprocessor_example2.pdf")
 plt.close()
-plot_external_legend(schedules, entity="Processor", filename="EDF_multiprocessor_legend2.pdf")
