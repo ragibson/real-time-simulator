@@ -62,19 +62,29 @@ def make_nonpreemptive(priority_function):
     return nonpreemptive_variant
 
 
-def make_pfair(task):
+def _Pfair(job, t, eps=1e-7):
+    if job.remaining_overhead > 0:
+        raise ValueError("Pfair implementation does not support overhead!")
+
+    if job.remaining_cost == job.deadline - t:
+        return -inf  # job must run immediately, successor bit insufficient for tiebreak here
+
+    task = job.task
     phase, period, cost, relative_deadline, id = task.phase, task.period, task.cost, task.relative_deadline, task.id
-
     weight = cost / relative_deadline
-    new_tasks = []
-    for i in range(1, cost + 1):
-        pseudorelease = phase + floor((i - 1) / weight)
-        pseudodeadline = phase + ceil(i / weight)
-        window_length = pseudodeadline - pseudorelease
-        new_tasks.append(PeriodicTask(phase=pseudorelease, period=period,
-                                      cost=1, relative_deadline=window_length, id=id))
+    subtask_idx = job.cost - job.remaining_cost + 1
+    pseudorelease = phase + floor((subtask_idx - 1) / weight)
+    pseudodeadline = phase + ceil(subtask_idx / weight)
+    successor_bit = ceil(subtask_idx / weight) - floor(subtask_idx / weight)
+    if weight == 1:
+        group_deadline = phase + relative_deadline  # does not imply infinite deadline when D_i != T_i
+    else:
+        group_deadline = phase + ceil(ceil(ceil(subtask_idx / weight) * (1 - weight)) / (1 - weight))
 
-    return new_tasks
+    priority = pseudodeadline  # earlier deadline is higher priority
+    priority -= successor_bit / 2  # deadline ties broken in favor of job with successor bit
+    priority -= group_deadline * eps  # further ties broken in favor of *later* group deadline
+    return priority
 
 
 priority_RM = handle_overhead(_RM)
@@ -82,6 +92,7 @@ priority_DM = handle_overhead(_DM)
 priority_static = handle_overhead(_static)
 priority_EDF = handle_overhead(_EDF)
 priority_LLF = handle_overhead(_LLF)
+priority_Pfair = _Pfair  # overhead cannot be supported without changing Pfair's quantum size
 
 priority_NP_RM = make_nonpreemptive(priority_RM)
 priority_NP_DM = make_nonpreemptive(priority_DM)
