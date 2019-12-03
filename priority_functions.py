@@ -71,7 +71,7 @@ def _Pfair(job, t, eps=1e-7):
 
     task = job.task
     phase, period, cost, relative_deadline, id = task.phase, task.period, task.cost, task.relative_deadline, task.id
-    weight = cost / relative_deadline
+    weight = max(cost / period, cost / relative_deadline)
     subtask_idx = job.cost - job.remaining_cost + 1
     pseudorelease = phase + floor((subtask_idx - 1) / weight)
     pseudodeadline = phase + ceil(subtask_idx / weight)
